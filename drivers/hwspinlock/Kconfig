@@ -21,3 +21,11 @@ config HWSPINLOCK_OMAP
 	  introduced in OMAP4).
 
 	  If unsure, say N.
+
+config HWSPINLOCK_TEST
+	tristate "Test module for the common HWSPINLOCK interface"
+	help
+	  This enables a test module for the common hardware spinlock
+	  interface. It is only needed for testing purposes.
+
+	  If unsure, say N.
