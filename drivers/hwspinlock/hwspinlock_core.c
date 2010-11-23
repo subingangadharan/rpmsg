@@ -417,7 +417,7 @@ struct hwspinlock *hwspin_lock_request(void)
 	ret = radix_tree_gang_lookup_tag(&hwspinlock_tree, (void **)&hwlock,
 						0, 1, HWSPINLOCK_UNUSED);
 	if (ret == 0) {
-		pr_warn("a free hwspinlock is not available\n");
+		//pr_warn("a free hwspinlock is not available\n");
 		hwlock = NULL;
 		goto out;
 	}
@@ -471,7 +471,7 @@ struct hwspinlock *hwspin_lock_request_specific(unsigned int id)
 	/* make sure this hwspinlock is unused */
 	ret = radix_tree_tag_get(&hwspinlock_tree, id, HWSPINLOCK_UNUSED);
 	if (ret == 0) {
-		pr_warn("hwspinlock %u is already in use\n", id);
+		//pr_warn("hwspinlock %u is already in use\n", id);
 		hwlock = NULL;
 		goto out;
 	}
