@@ -1,0 +1,13 @@
+config RPMSG
+	tristate "Virtio-based remote processor messaging bus"
+	depends on VIRTIO
+	---help---
+	  This virtio driver provides support for shared-memory-based
+          remote processor messaging, by registering the RPMSG bus which
+          in turn enables a plethora of IPC drivers.
+
+	  Such support is usually required to offload cpu-intensive
+          or latency-sensitive tasks to specialized remote processors with
+          dedicated hardware accelerators and/or real-time properties.
+
+	  If unsure, say N.
