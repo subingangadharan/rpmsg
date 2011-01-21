@@ -185,11 +185,16 @@ void unregister_virtio_driver(struct virtio_driver *driver)
 }
 EXPORT_SYMBOL_GPL(unregister_virtio_driver);
 
+static void virtio_device_release(struct device *dev)
+{
+}
+
 int register_virtio_device(struct virtio_device *dev)
 {
 	int err;
 
 	dev->dev.bus = &virtio_bus;
+	dev->dev.release = virtio_device_release;
 
 	/* Assign a unique device index and hence name. */
 	dev->index = dev_index++;
