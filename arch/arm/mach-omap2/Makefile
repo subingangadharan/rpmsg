@@ -162,10 +162,9 @@ mailbox_mach-objs			:= mailbox.o
 
 remoteproc-$(CONFIG_OMAP_IOMMU)		:= remoteproc44xx.o
 obj-y                                  += $(remoteproc-m) $(remoteproc-y)
-obj-$(CONFIG_OMAP_IOMMU)		+= iommu2.o
 
-iommu-$(CONFIG_OMAP_IOMMU)		:= omap-iommu.o
-obj-y					+= $(iommu-m) $(iommu-y)
+iommu-y					+= iommu2.o omap-iommu.o
+obj-$(CONFIG_OMAP_IOMMU)		+= $(iommu-y)
 
 i2c-omap-$(CONFIG_I2C_OMAP)		:= i2c.o
 obj-y					+= $(i2c-omap-m) $(i2c-omap-y)
