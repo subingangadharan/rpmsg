@@ -160,6 +160,8 @@ obj-$(CONFIG_ARCH_OMAP4)		+= omap_l3_noc.o
 obj-$(CONFIG_OMAP_MBOX_FWK)		+= mailbox_mach.o
 mailbox_mach-objs			:= mailbox.o
 
+remoteproc-$(CONFIG_OMAP_IOMMU)		:= remoteproc44xx.o
+obj-y                                  += $(remoteproc-m) $(remoteproc-y)
 obj-$(CONFIG_OMAP_IOMMU)		+= iommu2.o
 
 iommu-$(CONFIG_OMAP_IOMMU)		:= omap-iommu.o
