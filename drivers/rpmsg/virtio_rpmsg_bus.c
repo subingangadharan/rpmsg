@@ -71,6 +71,7 @@ struct virtproc_info {
 #define RPMSG_RESERVED_ADDRESSES	(1024)
 
 /* Reserve address 53 for the name service */
+/* this is preliminary and experimental. will be replaces soon */
 #define RPMSG_NS_ADDR			(53)
 
 /* show configuration fields */
@@ -296,6 +297,7 @@ struct rpmsg_channel *rpmsg_create_channel(struct virtproc_info *vrp,
 	struct device *tmp, *dev = &vrp->vdev->dev;
 	int ret;
 
+	/* make sure a similar channel doesn't already exist */
 	tmp = device_find_child(dev, chinfo, rpmsg_channel_match);
 	if (tmp) {
 		dev_err(dev, "channel %s:%x:%x already exist\n",
@@ -314,7 +316,7 @@ struct rpmsg_channel *rpmsg_create_channel(struct virtproc_info *vrp,
 	rpdev->dst = chinfo->dst;
 	strncpy(rpdev->id.name, chinfo->name, RPMSG_NAME_SIZE);
 
-	/* very simple device indexing plumbing which just works */
+	/* very simple device indexing plumbing which just works (for now) */
 	dev_set_name(&rpdev->dev, "rpmsg%d", rpmsg_dev_index++);
 
 	rpdev->dev.parent = &vrp->vdev->dev;
@@ -366,6 +368,7 @@ static void *get_a_buf(struct virtproc_info *vrp)
 		return virtqueue_get_buf(vrp->svq, &len);
 }
 
+/* XXX: the blocking 'wait' mechanism hasn't been tested yet */
 int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 					void *data, int len, bool wait)
 {
@@ -576,6 +579,7 @@ static int rpmsg_probe(struct virtio_device *vdev)
 	dev_info(&vdev->dev, "rpmsg backend virtproc probed successfully\n");
 
 	/* if supported by the remote processor, enable the name service */
+	/* this is preliminary and experimental. will be replaced soon */
 	if (virtio_has_feature(vdev, VIRTIO_RPMSG_F_NS)) {
 		struct rpmsg_channel_info chinfo = {
 			"rpmsg-name-service", RPMSG_NS_ADDR, RPMSG_NS_ADDR };
