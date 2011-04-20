@@ -31,6 +31,7 @@
 #include <linux/input/tps6507x-ts.h>
 #include <linux/spi/spi.h>
 #include <linux/spi/flash.h>
+#include <linux/remoteproc.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -160,6 +161,19 @@ static struct platform_device da850_evm_norflash_device = {
 	.resource	= da850_evm_norflash_resource,
 };
 
+static struct rproc_platform_data da850_dsp_rproc_pdata = {
+	.name		= "dsp",
+	.firmware	= "davinci-dsp.bin",
+};
+
+static struct platform_device da850_dsp_rproc_device = {
+	.name		= "davinci-rproc",
+	.id		= 0,
+	.dev		= {
+		.platform_data  = &da850_dsp_rproc_pdata,
+	},
+};
+
 static struct davinci_pm_config da850_pm_pdata = {
 	.sleepcount = 128,
 };
@@ -255,6 +269,7 @@ static struct platform_device da850_evm_nandflash_device = {
 static struct platform_device *da850_evm_devices[] __initdata = {
 	&da850_evm_nandflash_device,
 	&da850_evm_norflash_device,
+	&da850_dsp_rproc_device,
 };
 
 #define DA8XX_AEMIF_CE2CFG_OFFSET	0x10
