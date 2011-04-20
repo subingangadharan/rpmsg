@@ -130,7 +130,7 @@ config OMAP_MBOX_KFIFO_SIZE
 	  module parameter).
 
 config OMAP_IOMMU
-	tristate
+	tristate "IOMMU support for OMAP devices"
 
 config OMAP_IOMMU_DEBUG
        tristate "Export OMAP IOMMU internals in DebugFS"
