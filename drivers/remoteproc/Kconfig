@@ -24,3 +24,21 @@ config OMAP_REMOTE_PROC
 
 	  It's safe to say n here if you're not interested in multimedia
 	  offloading or just want a bare minium kernel.
+
+config DAVINCI_REMOTE_PROC
+	bool "Davinci remoteproc support"
+	depends on ARCH_DAVINCI_DA850
+	select REMOTE_PROC
+	default y
+	help
+	  Say y here to support Davinci's remote processors via the remote
+	  processor framework.
+
+	  Currently only supported is the OMAPL138 chip with its DSP.
+
+	  Usually you want to say y here, in order to enable multimedia
+	  use-cases to run on your platform (multimedia codecs are
+	  offloaded to remote DSP processors using this framework).
+
+	  It's safe to say n here if you're not interested in multimedia
+	  offloading or just want a bare minium kernel.
