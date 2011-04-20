@@ -1,0 +1,164 @@
+/*
+ * Remote processor machine-specific module for OMAP4
+ *
+ * Copyright (C) 2011 Texas Instruments, Inc.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#define pr_fmt(fmt)    "%s: " fmt, __func__
+
+#include <linux/kernel.h>
+#include <linux/clk.h>
+#include <linux/err.h>
+#include <linux/platform_device.h>
+#include <linux/remoteproc.h>
+
+#include <plat/iommu.h>
+#include <plat/omap_device.h>
+
+static inline u32 iotlb_set_entry(struct iotlb_entry *e, u32 da, u32 pa,
+								u32 pgsz)
+{
+	memset(e, 0, sizeof(*e));
+
+	e->da           = da;
+	e->pa           = pa;
+	e->valid        = 1;
+	e->pgsz         = pgsz;
+	e->endian       = MMU_RAM_ENDIAN_LITTLE;
+	e->elsz         = MMU_RAM_ELSZ_32;
+	e->mixed        = 0;
+
+	return iopgsz_to_bytes(e->pgsz);
+}
+
+static int omap_rproc_map(struct iommu *obj, u32 da, u32 pa, u32 size)
+{
+	struct iotlb_entry e;
+	u32 all_bits, i;
+	u32 pg_size[] = {SZ_16M, SZ_1M, SZ_64K, SZ_4K};
+	int size_flag[] = {MMU_CAM_PGSZ_16M, MMU_CAM_PGSZ_1M,
+		MMU_CAM_PGSZ_64K, MMU_CAM_PGSZ_4K};
+
+	while (size) {
+		/*
+		 * To find the max. page size with which both PA & VA are
+		 * aligned
+		 */
+		all_bits = pa | da;
+		for (i = 0; i < 4; i++) {
+			if ((size >= pg_size[i]) &&
+				((all_bits & (pg_size[i] - 1)) == 0)) {
+				break;
+			}
+		}
+		iotlb_set_entry(&e, da, pa, size_flag[i]);
+		iopgtable_store_entry(obj, &e);
+		size -= pg_size[i];
+		da += pg_size[i];
+		pa += pg_size[i];
+	}
+	return 0;
+}
+
+static inline int omap_rproc_start(struct rproc *rproc, u32 start_addr)
+{
+	struct device *dev = rproc->dev;
+	struct platform_device *pdev = to_platform_device(dev);
+	struct rproc_platform_data *pdata = dev->platform_data;
+	struct iommu *iommu;
+	int ret, i;
+
+	iommu = iommu_get(pdata->iommu_name);
+	if (IS_ERR_OR_NULL(iommu)) {
+		dev_err(dev, "iommu_get error: %ld\n", PTR_ERR(iommu));
+		return PTR_ERR(iommu);
+	}
+
+	rproc->priv = iommu;
+
+	/* temporary workaround */
+	clk_enable(iommu->clk);
+
+	for (i = 0; rproc->memory_maps[i].size; i++) {
+		const struct rproc_mem_entry *me = &rproc->memory_maps[i];
+
+		omap_rproc_map(iommu, me->da, me->pa, me->size);
+	}
+
+	ret = omap_device_enable(pdev);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static inline int omap_rproc_stop(struct rproc *rproc)
+{
+	struct device *dev = rproc->dev;
+	struct platform_device *pdev = to_platform_device(dev);
+	struct iommu *iommu = rproc->priv;
+	int ret;
+
+	ret = omap_device_shutdown(pdev);
+	if (ret)
+		dev_err(dev, "failed to shutdown: %d\n", ret);
+
+	iommu_put(iommu);
+
+	clk_disable(iommu->clk);
+
+	return ret;
+}
+
+static struct rproc_ops omap_rproc_ops = {
+	.start = omap_rproc_start,
+	.stop = omap_rproc_stop,
+};
+
+static int omap_rproc_probe(struct platform_device *pdev)
+{
+	struct rproc_platform_data *pdata = pdev->dev.platform_data;
+
+	return rproc_register(&pdev->dev, pdata->name, &omap_rproc_ops,
+				pdata->firmware, pdata->memory_maps);
+}
+
+static int __devexit omap_rproc_remove(struct platform_device *pdev)
+{
+	struct rproc_platform_data *pdata = pdev->dev.platform_data;
+
+	return rproc_unregister(pdata->name);
+}
+
+static struct platform_driver omap_rproc_driver = {
+	.probe = omap_rproc_probe,
+	.remove = __devexit_p(omap_rproc_remove),
+	.driver = {
+		.name = "omap-rproc",
+		.owner = THIS_MODULE,
+	},
+};
+
+static int __init omap_rproc_init(void)
+{
+	return platform_driver_register(&omap_rproc_driver);
+}
+module_init(omap_rproc_init);
+
+static void __exit omap_rproc_exit(void)
+{
+	platform_driver_unregister(&omap_rproc_driver);
+}
+module_exit(omap_rproc_exit);
+
+MODULE_LICENSE("GPL v2");
+MODULE_DESCRIPTION("OMAP Remote Processor control driver");
