@@ -109,7 +109,7 @@ struct rproc_mem_entry {
 struct rproc;
 
 struct rproc_ops {
-	int (*start)(struct rproc *rproc, u32 start_addr);
+	int (*start)(struct rproc *rproc, u64 bootaddr);
 	int (*stop)(struct rproc *rproc);
 };
 

@@ -159,7 +159,7 @@ static u32 rproc_da_to_pa(const struct rproc_mem_entry *maps, u32 da)
 	return 0;
 }
 
-static void rproc_start(struct rproc *rproc)
+static void rproc_start(struct rproc *rproc, u64 bootaddr)
 {
 	struct device *dev = rproc->dev;
 	int err;
@@ -170,7 +170,7 @@ static void rproc_start(struct rproc *rproc)
 		return;
 	}
 
-	err = rproc->ops->start(rproc, 0);
+	err = rproc->ops->start(rproc, bootaddr);
 	if (err) {
 		dev_err(dev, "can't start rproc %s: %d\n", rproc->name, err);
 		goto unlock_mutext;
@@ -184,14 +184,12 @@ unlock_mutext:
 	mutex_unlock(&rproc->lock);
 }
 
-static void
-rproc_handle_resources(struct rproc *rproc, void *data, int len)
+static u64
+rproc_handle_resources(struct rproc *rproc, struct fw_resource *rsc, int len)
 {
-	struct fw_resource *rsc = data;
 	struct device *dev = rproc->dev;
 	u32 pa, offset, base;
-	u64 da;
-	//u32 da;
+	u64 da, bootaddr = 0;
 	void *ptr;
 
 	while (len >= sizeof(*rsc)) {
@@ -236,6 +234,9 @@ rproc_handle_resources(struct rproc *rproc, void *data, int len)
 				DEBUGFS_ADD(trace1);
 			}
 			break;
+		case RSC_BOOTADDR:
+			bootaddr = da;
+			break;
 		default:
 			/* we don't support much right now. so use dbg lvl */
 			dev_dbg(dev, "unsupported resource type %d\n",
@@ -246,6 +247,8 @@ rproc_handle_resources(struct rproc *rproc, void *data, int len)
 		rsc++;
 		len -= sizeof(*rsc);
 	}
+
+	return bootaddr;
 }
 
 static void rproc_loader_cont(const struct firmware *fw, void *context)
@@ -254,6 +257,7 @@ static void rproc_loader_cont(const struct firmware *fw, void *context)
 	struct device *dev = rproc->dev;
 	const char *fwfile = rproc->firmware;
 	u32 left;
+	u64 bootaddr = 0;
 	struct fw_header *image;
 	struct fw_section *section;
 	int ret;
@@ -288,7 +292,6 @@ static void rproc_loader_cont(const struct firmware *fw, void *context)
 	while (left > sizeof(struct fw_section)) {
 		u32 pa, len, type;
 		u64 da;
-		//u32 da;
 		void *ptr;
 
 		da = section->da;
@@ -326,17 +329,18 @@ static void rproc_loader_cont(const struct firmware *fw, void *context)
 
 		memcpy(ptr, section->content, len);
 
-		iounmap(ptr);
-
 		/* a resource table needs special handling */
 		if (section->type == FW_RESOURCE)
-			rproc_handle_resources(rproc, ptr, len);
+			bootaddr = rproc_handle_resources(rproc,
+					(struct fw_resource *) ptr, len);
+
+		iounmap(ptr);
 
 		section = (struct fw_section *)(section->content + len);
 		left -= len;
 	}
 
-	rproc_start(rproc);
+	rproc_start(rproc, bootaddr);
 
 out:
 	release_firmware(fw);

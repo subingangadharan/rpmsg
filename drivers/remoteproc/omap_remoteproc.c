@@ -69,7 +69,7 @@ static int omap_rproc_map(struct iommu *obj, u32 da, u32 pa, u32 size)
 	return 0;
 }
 
-static inline int omap_rproc_start(struct rproc *rproc, u32 start_addr)
+static inline int omap_rproc_start(struct rproc *rproc, u64 bootaddr)
 {
 	struct device *dev = rproc->dev;
 	struct platform_device *pdev = to_platform_device(dev);

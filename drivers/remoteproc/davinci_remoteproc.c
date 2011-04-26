@@ -15,7 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/remoteproc.h>
 
-static inline int davinci_rproc_start(struct rproc *rproc, u32 start_addr)
+static inline int davinci_rproc_start(struct rproc *rproc, u64 bootaddr)
 {
 	struct device *dev = rproc->dev;
 	struct platform_device *pdev = to_platform_device(dev);
