@@ -443,8 +443,8 @@ static int __init omap_rpmsg_ini(void)
 		rpdev->vring[0] = paddr + RPMSG_BUFS_SPACE;
 		rpdev->vring[1] = paddr + RPMSG_BUFS_SPACE + RPMSG_RING_SIZE;
 
-		paddr += 0x50000;//RPMSG_IPC_MEM;
-		psize -= 0x50000;//RPMSG_IPC_MEM;
+		paddr += RPMSG_IPC_MEM;
+		psize -= RPMSG_IPC_MEM;
 
 		pr_debug("rpdev%d: buf 0x%x, vring0 0x%x, vring1 0x%x\n", i,
 			rpdev->buf_addr, rpdev->vring[0], rpdev->vring[1]);

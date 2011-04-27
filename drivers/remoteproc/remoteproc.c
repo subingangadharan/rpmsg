@@ -429,7 +429,6 @@ struct rproc *rproc_get(const char *name)
 
 	/* if the remote proc is loading or already powered up, bail out */
 	if (rproc->count++) {
-		dev_info(dev, "%s is already (being) powered up\n", name);
 		ret = rproc;
 		goto unlock_mutext;
 	}
