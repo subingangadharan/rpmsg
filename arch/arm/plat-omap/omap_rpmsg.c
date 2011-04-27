@@ -202,8 +202,7 @@ static struct virtqueue *rp_find_vq(struct virtio_device *vdev,
 	if (!rpvq)
 		return ERR_PTR(-ENOMEM);
 
-	/* map the vring using uncacheable memory (which is ioremap's default,
-	 * but let's make it explicit) and cast away sparse's complaints */
+	/* ioremap'ing normal memory, so we cast away sparse's complaints */
 	rpvq->addr = (__force void *) ioremap_nocache(rpdev->vring[index],
 							RPMSG_RING_SIZE);
 	if (!rpvq->addr) {
@@ -233,6 +232,7 @@ static struct virtqueue *rp_find_vq(struct virtio_device *vdev,
 	return vq;
 
 unmap_vring:
+	/* iounmap normal memory, so make sparse happy */
 	iounmap((__force void __iomem *) rpvq->addr);
 free_rpvq:
 	kfree(rpvq);
@@ -279,7 +279,7 @@ static int omap_rpmsg_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 
 	rpdev->num_of_vqs = nvqs;
 
-	/* can be used as normal memory, so we cast away sparse's complaints */
+	/* ioremap'ing normal memory, so we cast away sparse's complaints */
 	rpdev->buf_mapped = (__force void *) ioremap_nocache(rpdev->buf_addr,
 							rpdev->buf_size);
 	if (!rpdev->buf_mapped) {
@@ -335,6 +335,7 @@ static int omap_rpmsg_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 put_mbox:
 	omap_mbox_put(rpdev->mbox, &rpdev->nb);
 unmap_buf:
+	/* iounmap normal memory, so make sparse happy */
 	iounmap((__force void __iomem *)rpdev->buf_mapped);
 error:
 	omap_rpmsg_del_vqs(vdev);

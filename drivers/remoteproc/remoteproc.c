@@ -314,11 +314,13 @@ static int rproc_process_fw(struct rproc *rproc, struct fw_section *section,
 						(struct fw_resource *) ptr,
 						len, bootaddr);
 			if (ret) {
+				/* iounmap normal mem, so make sparse happy */
 				iounmap((__force void __iomem *) ptr);
 				break;
 			}
 		}
 
+		/* iounmap normal memory, so make sparse happy */
 		iounmap((__force void __iomem *) ptr);
 
 		section = (struct fw_section *)(section->content + len);
@@ -473,8 +475,10 @@ void rproc_put(struct rproc *rproc)
 		goto out;
 
 	if (rproc->trace_buf0)
+		/* iounmap normal memory, so make sparse happy */
 		iounmap((__force void __iomem *) rproc->trace_buf0);
 	if (rproc->trace_buf1)
+		/* iounmap normal memory, so make sparse happy */
 		iounmap((__force void __iomem *) rproc->trace_buf1);
 
 	rproc->trace_buf0 = rproc->trace_buf1 = NULL;
