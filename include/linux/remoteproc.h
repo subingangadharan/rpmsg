@@ -101,8 +101,8 @@ enum fw_resource_type {
  * @size:	size of this memory region
  */
 struct rproc_mem_entry {
-	u32 da;
-	u32 pa;
+	u64 da;
+	phys_addr_t pa;
 	u32 size;
 };
 
@@ -136,16 +136,6 @@ enum {
 };
 
 #define RPROC_MAX_NAME	100
-
-struct rproc_platform_data {
-	struct rproc_ops *ops;
-	char *name;
-	char *iommu_name;
-	char *oh_name;
-	char *oh_name_opt;
-	char *firmware;
-	const struct rproc_mem_entry *memory_maps;
-};
 
 struct rproc {
 	struct list_head next;

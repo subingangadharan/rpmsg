@@ -22,6 +22,7 @@
 
 #include <plat/omap_device.h>
 #include <plat/omap_hwmod.h>
+#include <plat/remoteproc.h>
 #include <plat/dsp.h>
 #include <plat/io.h>
 
@@ -48,7 +49,7 @@ static struct rproc_mem_entry ipu_memory_maps[] = {
 	{ }
 };
 
-static struct rproc_platform_data omap4_rproc_data[] = {
+static struct omap_rproc_pdata omap4_rproc_data[] = {
 	{
 		.name		= "dsp",
 		.iommu_name	= "tesla",
@@ -134,7 +135,7 @@ static int __init omap_rproc_init(void)
 
 		od = omap_device_build_ss(pdev_name, i, oh, oh_count,
 					&omap4_rproc_data[i],
-					sizeof(struct rproc_platform_data),
+					sizeof(struct omap_rproc_pdata),
 					omap_rproc_latency,
 					ARRAY_SIZE(omap_rproc_latency),
 					false);

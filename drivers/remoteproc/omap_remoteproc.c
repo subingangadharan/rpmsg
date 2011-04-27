@@ -23,6 +23,7 @@
 
 #include <plat/iommu.h>
 #include <plat/omap_device.h>
+#include <plat/remoteproc.h>
 
 static inline u32 iotlb_set_entry(struct iotlb_entry *e, u32 da, u32 pa,
 								u32 pgsz)
@@ -73,7 +74,7 @@ static inline int omap_rproc_start(struct rproc *rproc, u64 bootaddr)
 {
 	struct device *dev = rproc->dev;
 	struct platform_device *pdev = to_platform_device(dev);
-	struct rproc_platform_data *pdata = dev->platform_data;
+	struct omap_rproc_pdata *pdata = dev->platform_data;
 	struct iommu *iommu;
 	int ret, i;
 
@@ -126,7 +127,7 @@ static struct rproc_ops omap_rproc_ops = {
 
 static int omap_rproc_probe(struct platform_device *pdev)
 {
-	struct rproc_platform_data *pdata = pdev->dev.platform_data;
+	struct omap_rproc_pdata *pdata = pdev->dev.platform_data;
 
 	return rproc_register(&pdev->dev, pdata->name, &omap_rproc_ops,
 				pdata->firmware, pdata->memory_maps);
@@ -134,7 +135,7 @@ static int omap_rproc_probe(struct platform_device *pdev)
 
 static int __devexit omap_rproc_remove(struct platform_device *pdev)
 {
-	struct rproc_platform_data *pdata = pdev->dev.platform_data;
+	struct omap_rproc_pdata *pdata = pdev->dev.platform_data;
 
 	return rproc_unregister(pdata->name);
 }

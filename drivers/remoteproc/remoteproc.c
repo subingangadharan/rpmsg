@@ -130,21 +130,20 @@ static struct rproc *__find_rproc_by_name(const char *name)
  * __rproc_da_to_pa - convert a device (virtual) address to its physical address
  * @maps: the remote processor's memory mappings array
  * @da: a device address (as seen by the remote processor)
+ * @pa: pointer to the physical address result
  *
  * This function converts @da to its physical address (pa) by going through
  * @maps, looking for a mapping that contains @da, and then calculating the
  * appropriate pa.
  *
- * Returns the appropriate pa, or 0 if @da isn't mapped yet to the
- * remote processor's view.
- * Note: address 0 is not mappable on ARM, and therefore can be used as
- * an error value here. if support is added beyond
- * todo: use ERR_PTR
+ * On success 0 is returned, and the @pa is updated with the result.
+ * Otherwise, -EINVAL is returned.
  */
-static u32 rproc_da_to_pa(const struct rproc_mem_entry *maps, u32 da)
+static int
+rproc_da_to_pa(const struct rproc_mem_entry *maps, u64 da, phys_addr_t *pa)
 {
 	int i;
-	u32 offset;
+	u64 offset;
 
 	for (i = 0; maps[i].size; i++) {
 		const struct rproc_mem_entry *me = &maps[i];
@@ -152,13 +151,21 @@ static u32 rproc_da_to_pa(const struct rproc_mem_entry *maps, u32 da)
 		if (da >= me->da && da < (me->da + me->size)) {
 			offset = da - me->da;
 			pr_debug("%s: matched mem entry no. %d\n", __func__, i);
-			return me->pa + offset;
+			*pa = me->pa + offset;
+			return 0;
 		}
 	}
 
-	return 0;
+	return -EINVAL;
 }
 
+/**
+ * rproc_start - power on the remote processor and let it start running
+ * @rproc: the remote processor
+ * @bootaddr: address of first instruction to execute (optional)
+ *
+ * Start a remote processor (i.e. power it on, take it out of reset, etc..)
+ */
 static void rproc_start(struct rproc *rproc, u64 bootaddr)
 {
 	struct device *dev = rproc->dev;
@@ -184,29 +191,30 @@ unlock_mutext:
 	mutex_unlock(&rproc->lock);
 }
 
-static u64
-rproc_handle_resources(struct rproc *rproc, struct fw_resource *rsc, int len)
+static int rproc_handle_resources(struct rproc *rproc, struct fw_resource *rsc,
+							int len, u64 *bootaddr)
 {
 	struct device *dev = rproc->dev;
-	u32 pa, offset, base;
-	u64 da, bootaddr = 0;
+	phys_addr_t pa;
+	u64 da;
 	void *ptr;
+	int ret;
 
 	while (len >= sizeof(*rsc)) {
 		da = rsc->da;
-		if (da > UINT_MAX)
-			dev_warn(dev, "too big a da !\n");
 
-		pa = rproc_da_to_pa(rproc->memory_maps, da);
-		if (!pa)
-			dev_dbg(dev, "zero pa ! change to PTR_ERR\n");
+		ret = rproc_da_to_pa(rproc->memory_maps, da, &pa);
+		if (ret) {
+			dev_err(dev, "invalid device address\n");
+			return -EINVAL;
+		}
 
 		dev_dbg(dev, "resource: type %d, da 0x%llx, pa 0x%x, len 0x%x"
 			", reserved %d, name %s\n", rsc->type, rsc->da, pa,
 			rsc->len, rsc->reserved, rsc->name);
 
 		if (rsc->reserved)
-			dev_warn(dev, "rsc %s: nonzero reserved\n", rsc->name);
+			dev_warn(dev, "nonzero reserved\n");
 
 		switch (rsc->type) {
 		case RSC_TRACE:
@@ -215,14 +223,17 @@ rproc_handle_resources(struct rproc *rproc, struct fw_resource *rsc, int len)
 						rsc->name);
 				break;
 			}
-			offset = pa & 0xFFF;
-			base = pa & 0xFFFFF000;
 
-			ptr = ioremap_nocache(base,
-					__ALIGN_MASK(offset + rsc->len, 0xFFF));
-			if (!ptr)
+			/*
+			 * trace buffer memory _is_ normal memory, so we cast
+			 * away the __iomem to make sparse happy
+			 */
+			ptr = (__force void *) ioremap_nocache(pa, rsc->len);
+			if (!ptr) {
 				dev_err(dev, "can't ioremap trace buffer %s\n",
 								rsc->name);
+				break;
+			}
 
 			if (!rproc->trace_buf0) {
 				rproc->trace_len0 = rsc->len;
@@ -235,12 +246,12 @@ rproc_handle_resources(struct rproc *rproc, struct fw_resource *rsc, int len)
 			}
 			break;
 		case RSC_BOOTADDR:
-			bootaddr = da;
+			*bootaddr = da;
 			break;
 		default:
 			/* we don't support much right now. so use dbg lvl */
 			dev_dbg(dev, "unsupported resource type %d\n",
-							rsc->type);
+								rsc->type);
 			break;
 		}
 
@@ -248,7 +259,73 @@ rproc_handle_resources(struct rproc *rproc, struct fw_resource *rsc, int len)
 		len -= sizeof(*rsc);
 	}
 
-	return bootaddr;
+	return 0;
+}
+
+static int rproc_process_fw(struct rproc *rproc, struct fw_section *section,
+						int left, u64 *bootaddr)
+{
+	struct device *dev = rproc->dev;
+	phys_addr_t pa;
+	u32 len, type;
+	u64 da;
+	int ret = 0;
+	void *ptr;
+
+	while (left > sizeof(struct fw_section)) {
+		da = section->da;
+		len = section->len;
+		type = section->type;
+
+		dev_dbg(dev, "section: type %d da 0x%llx len 0x%x\n",
+								type, da, len);
+
+		if (da > UINT_MAX)
+			dev_warn(dev, "too big a da !\n");
+
+		left -= sizeof(struct fw_section);
+		if (left < section->len) {
+			dev_err(dev, "BIOS image is truncated\n");
+			ret = -EINVAL;
+			break;
+		}
+
+		ret = rproc_da_to_pa(rproc->memory_maps, da, &pa);
+		if (ret) {
+			dev_err(dev, "rproc_da_to_pa failed: %d\n", ret);
+			break;
+		}
+
+		dev_dbg(dev, "da 0x%llx pa 0x%x len 0x%x\n", da, pa, len);
+
+		/* ioremaping normal memory, so make sparse happy */
+		ptr = (__force void *) ioremap_nocache(pa, len);
+		if (!ptr) {
+			dev_err(dev, "can't ioremap 0x%x\n", pa);
+			ret = -ENOMEM;
+			break;
+		}
+
+		memcpy(ptr, section->content, len);
+
+		/* a resource table needs special handling */
+		if (section->type == FW_RESOURCE) {
+			ret = rproc_handle_resources(rproc,
+						(struct fw_resource *) ptr,
+						len, bootaddr);
+			if (ret) {
+				iounmap((__force void __iomem *) ptr);
+				break;
+			}
+		}
+
+		iounmap((__force void __iomem *) ptr);
+
+		section = (struct fw_section *)(section->content + len);
+		left -= len;
+	}
+
+	return ret;
 }
 
 static void rproc_loader_cont(const struct firmware *fw, void *context)
@@ -256,11 +333,10 @@ static void rproc_loader_cont(const struct firmware *fw, void *context)
 	struct rproc *rproc = context;
 	struct device *dev = rproc->dev;
 	const char *fwfile = rproc->firmware;
-	u32 left;
 	u64 bootaddr = 0;
 	struct fw_header *image;
 	struct fw_section *section;
-	int ret;
+	int left, ret;
 
 	if (!fw) {
 		dev_err(dev, "%s: failed to load %s\n", __func__, fwfile);
@@ -289,55 +365,10 @@ static void rproc_loader_cont(const struct firmware *fw, void *context)
 
 	left = fw->size - sizeof(struct fw_header) - image->header_len;
 
-	while (left > sizeof(struct fw_section)) {
-		u32 pa, len, type;
-		u64 da;
-		void *ptr;
-
-		da = section->da;
-		len = section->len;
-		type = section->type;
-
-		dev_dbg(dev, "section: type %d da 0x%llx len 0x%x\n",
-								type, da, len);
-
-		if (da > UINT_MAX)
-			dev_warn(dev, "too big a da !\n");
-
-		left -= sizeof(struct fw_section);
-		if (left < section->len) {
-			dev_err(dev, "BIOS image is truncated\n");
-			ret = -EINVAL;
-			goto out;
-		}
-
-		pa = rproc_da_to_pa(rproc->memory_maps, da);
-		if (!pa) {
-			dev_err(dev, "invalid da (0x%llx) in %s\n", da, fwfile);
-			ret = -EINVAL;
-			goto out;
-		}
-
-		dev_dbg(dev, "da 0x%llx pa 0x%x len 0x%x\n", da, pa, len);
-
-		ptr = ioremap(pa, len);
-		if (!ptr) {
-			dev_err(dev, "can't ioremap 0x%x (%s)\n", pa, fwfile);
-			ret = -ENOMEM;
-			goto out;
-		}
-
-		memcpy(ptr, section->content, len);
-
-		/* a resource table needs special handling */
-		if (section->type == FW_RESOURCE)
-			bootaddr = rproc_handle_resources(rproc,
-					(struct fw_resource *) ptr, len);
-
-		iounmap(ptr);
-
-		section = (struct fw_section *)(section->content + len);
-		left -= len;
+	ret = rproc_process_fw(rproc, section, left, &bootaddr);
+	if (ret) {
+		dev_err(dev, "Failed to process the image: %d\n", ret);
+		goto out;
 	}
 
 	rproc_start(rproc, bootaddr);
@@ -442,9 +473,9 @@ void rproc_put(struct rproc *rproc)
 		goto out;
 
 	if (rproc->trace_buf0)
-		iounmap(rproc->trace_buf0);
+		iounmap((__force void __iomem *) rproc->trace_buf0);
 	if (rproc->trace_buf1)
-		iounmap(rproc->trace_buf1);
+		iounmap((__force void __iomem *) rproc->trace_buf1);
 
 	rproc->trace_buf0 = rproc->trace_buf1 = NULL;
 
