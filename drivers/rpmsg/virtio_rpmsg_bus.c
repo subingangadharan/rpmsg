@@ -396,14 +396,19 @@ int rpmsg_send_offchannel_raw(struct rpmsg_channel *rpdev, u32 src, u32 dst,
 	if (!msg && !wait)
 		return -ENOMEM;
 
-	/* no free buffer ? wait for one (but bail after 5 seconds) */
+	/* no free buffer ? wait for one (but bail after 15 seconds) */
 	while (!msg) {
 		/* enable "tx-complete" interrupts before dozing off */
 		virtqueue_enable_cb(vrp->svq);
-		/* sleep until a free buffer is available or 5 sec elapse */
+		/*
+		 * sleep until a free buffer is available or 15 secs elapse.
+		 * the timeout period is not configurable because frankly
+		 * i don't see why drivers need to deal with that.
+		 * if later this happens to be required, it'd be easy to add.
+		 */
 		if (wait_event_interruptible_timeout(vrp->sendq,
 					(msg = get_a_buf(vrp)),
-					msecs_to_jiffies(5000)))
+					msecs_to_jiffies(15000)))
 			return -ERESTARTSYS;
 		/* on success, suppress "tx-complete" interrupts again */
 		if (msg)
