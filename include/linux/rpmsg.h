@@ -54,6 +54,17 @@ struct rpmsg_hdr {
 	u8 data[0];
 } __packed;
 
+enum rpmsg_ns_flags {
+	RPMSG_NS_CREATE		= 0,
+	RPMSG_NS_DESTROY	= 1,
+};
+
+struct rpmsg_ns_msg {
+	char name[RPMSG_NAME_SIZE];
+	u32 addr;
+	u32 flags;
+} __packed;
+
 /* driver requests */
 enum {
 	VPROC_BUF_ADDR,
@@ -68,13 +79,16 @@ enum {
 struct virtproc_info;
 
 /**
- * rpmsg_channel - representation of a point-to-point rpmsg channel
+ * rpmsg_channel - rpmsg channels are the devices of the rpmsg bus
+ *
  * @vrp: the remote processor this channel connects to
  * @dev: underlying device
  * @id: the device type identification (used to match an rpmsg driver)
  * @src: local address of this channel
  * @dst: destination address of the remote service
  * @priv: private pointer for the driver's use.
+ * @ept: local rpmsg endpoint of this channel
+ * @announce: need to tell remoteproc about channel creation/removal
  */
 struct rpmsg_channel {
 	struct virtproc_info *vrp;
@@ -84,6 +98,7 @@ struct rpmsg_channel {
 	u32 dst;
 	void *priv;
 	struct rpmsg_endpoint *ept;
+	bool announce;
 };
 
 struct rpmsg_channel_info {
